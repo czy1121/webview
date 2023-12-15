@@ -1,0 +1,31 @@
+<html>
+
+<head>
+<style>
+@font-face {
+font-family: 'din-medium';
+src: url("file:///android_res/font/din_medium.ttf")
+}
+
+div {font-size: 4em;}
+a {font-size: 4em;}
+</style>
+
+</head>
+
+<body style="padding:20px">
+<script type="text/javascript">
+
+</script>
+<br /><br />
+<br /><br />
+
+<p>
+
+    <a href="javascript:alert(JSBridge.test.getValue(1234, 123.4, 'abcdefg', true))">getValue</a>
+    <br /><br /><br />
+    <a href="javascript:JSBridge.test.hello('trump', function(message, o) { console.log('hello ==> ', message, o);alert(message + JSON.stringify(o))})">hello</a>
+    <br /><br /><br />
+</p>
+</body>
+</html>

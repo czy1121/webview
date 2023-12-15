@@ -1,0 +1,13 @@
+
+apply from: "$buildGradlePath/build-demo.gradle"
+
+
+dependencies {
+
+    implementation project(':webview-bundle')
+    implementation project(':webview-jsbridge')
+    implementation project(':webview-simple')
+
+    implementation "com.squareup.okhttp3:okhttp:4.10.0"
+    implementation "com.squareup.okhttp3:okhttp-urlconnection:4.10.0"
+}

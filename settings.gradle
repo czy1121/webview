@@ -1,0 +1,28 @@
+pluginManagement {
+    repositories {
+        gradlePluginPortal()
+        google()
+        mavenCentral()
+    }
+}
+
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url cosmoRepoPath }
+        google()
+        mavenCentral()
+    }
+    versionCatalogs {
+        libs {
+            from files("$buildGradlePath/versions-basic.toml")
+        }
+    }
+}
+rootProject.name = "webview"
+include ':app'
+
+include ':webview-bundle'
+include ':webview-jsbridge'
+include ':webview-simple'

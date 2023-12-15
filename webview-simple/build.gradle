@@ -1,0 +1,8 @@
+
+apply from: "$buildGradlePath/build-library-android.gradle"
+
+dependencies {
+
+    implementation 'androidx.annotation:annotation:1.7.0'
+    compileOnly "com.squareup.okhttp3:okhttp:4.10.0"
+}
