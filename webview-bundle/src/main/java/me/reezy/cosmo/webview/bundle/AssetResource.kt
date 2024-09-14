@@ -4,31 +4,24 @@ import android.content.res.AssetManager
 import android.webkit.MimeTypeMap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import java.io.FileNotFoundException
 
-class AssetResource(private val assets: AssetManager) {
+class AssetResource(private val assets: AssetManager, private val assetDir: String = "web-asset") {
 
-    private var rootDir: String = "webview-asset"
-
-
-    fun setRootDir(dir: String): AssetResource {
-        rootDir = dir
-        return this
-    }
-
-    fun intercept(request: WebResourceRequest): WebResourceResponse? {
+    fun get(request: WebResourceRequest): WebResourceResponse? {
         val uri = request.url
 
-        val base = "$rootDir/${uri.authority}"
-
-        assets.list(base)?.let {
-            val filename = uri.path ?: return null
-            if (it.contains(filename)) {
-                val mime = MimeTypeMap.getFileExtensionFromUrl(filename)
-                val stream = assets.open("$base/$filename")
-                return WebResourceResponse(mime, "", stream)
-            }
+        try {
+            val path = uri.path ?: return null
+            val stream = assets.open("$assetDir/${uri.authority}/$path")
+            return WebResourceResponse(getMimeType(path), "", stream)
+        } catch (ex: FileNotFoundException) {
+            //
         }
         return null
     }
 
+    private fun getMimeType(url: String): String? {
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(url))
+    }
 }

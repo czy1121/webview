@@ -1,95 +1,116 @@
 package me.reezy.cosmo.webview.bundle
 
-import android.content.Context
 import android.content.res.AssetManager
 import android.webkit.MimeTypeMap
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
-import okhttp3.*
-import okio.Buffer
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.json.JSONArray
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 
+class BundleResource(private val assets: AssetManager, private val bundleDir: File, private val httpClient: OkHttpClient) {
 
-class BundleResource(context: Context, private val httpClient: OkHttpClient) {
 
-    private class BundleItem(val uri: String, val hash: String)
+    private val asset = "asset://"
 
-    private val assets: AssetManager = context.assets
+    private val loaded = mutableMapOf<String, BundleItem>()
 
-    private val rootDir: File = File(context.filesDir, "webview-bundle")
-
-    private val loaded = mutableSetOf<BundleItem>()
-
-    private var isCacheLoaded = false
-
-    fun load(items: Map<String, String>) {
-        if (isCacheLoaded) {
-            isCacheLoaded = true
-            load(getCachedItems())
-        }
-        load(items.map { entry ->
-            if (entry.key.startsWith("asset://")) {
-                assets.open(entry.key.substring(8)).use {
-                    val buffer = Buffer()
-                    buffer.readFrom(it)
-                    BundleItem(entry.key, buffer.md5().hex())
+    fun add(bundles: List<BundleItem>) {
+        if (loaded.isEmpty()) {
+            getCachedBundles().forEach { item ->
+                if (loaded[item.id]?.uri != item.uri) {
+                    load(item)
                 }
-            } else {
-                BundleItem(entry.key, entry.value)
             }
-        })
-    }
+        }
 
-    private fun load(items: List<BundleItem>) {
-        items.forEach { item ->
-            if (!loaded.any { it.hash == item.hash }) {
-                loaded.removeAll { item.uri == it.uri }
+        bundles.forEach { item ->
+            if (loaded[item.id]?.uri != item.uri) {
                 load(item)
             }
         }
     }
 
+    fun get(request: WebResourceRequest): WebResourceResponse? {
+
+        val url = request.url.toString().split("?", "#")[0]
+
+        for (bundle in loaded.values) {
+            if (url.startsWith(bundle.baseUrl)) {
+                val file = File(bundleDir, url.replace(bundle.baseUrl, bundle.id))
+
+                if (file.exists() && file.isFile) {
+                    return WebResourceResponse(getMimeType(url), "", file.inputStream())
+                }
+                return null
+            }
+        }
+        return null
+    }
+
 
     private fun load(item: BundleItem) {
 
-        if (item.uri.startsWith("asset://")) {
-            assets.open(item.uri).unzip(item)
+        if (item.uri.startsWith(asset)) {
+            val file = item.uri.substring(asset.length)
+            extract(assets.open(file), item)
         } else {
             val request: Request = Request.Builder().url(item.uri).build()
             httpClient.newCall(request).enqueue(object : Callback {
                 override fun onResponse(call: Call, response: Response) {
-                    response.body?.byteStream()?.unzip(item)
+                    val bis = response.body?.byteStream() ?: return
+                    extract(bis, item)
                 }
 
-                override fun onFailure(call: Call, e: IOException) {
-
-                }
+                override fun onFailure(call: Call, e: IOException) {}
             })
         }
     }
 
-    private fun getCachedItems(): List<BundleItem> {
+
+    private fun extract(bundle: InputStream, item: BundleItem) {
+        try {
+            extractTo(bundle, File(bundleDir, item.id))
+
+            loaded[item.id] = item
+
+            val bundles = loaded.values.map { mapOf("id" to it.id, "uri" to it.uri, "baseUrl" to it.baseUrl) }
+            val json = JSONArray(bundles).toString()
+            File(bundleDir, "bundles").writeText(json)
+        } catch (ex: Throwable) {
+            ex.printStackTrace()
+        }
+    }
+
+    private fun getCachedBundles(): List<BundleItem> {
 
         try {
-            val json = File(rootDir, "bundles").readText()
-            val ja = JSONArray(json)
-            val array = mutableListOf<BundleItem>()
-            for (i in 0 until ja.length()) {
-                val jo = ja.optJSONObject(i)
-                val bundle = BundleItem(
-                    uri = jo.getString("uri"),
-                    hash = jo.getString("hash")
-                )
-                array.add(bundle)
-            }
+            val file = File(bundleDir, "bundles")
+            if (file.exists()) {
+                val ja = JSONArray(file.readText())
 
-            return array
+                val array = mutableListOf<BundleItem>()
+
+                for (i in 0 until ja.length()) {
+                    val jo = ja.optJSONObject(i)
+                    val bundle = BundleItem(
+                        id = jo.getString("id"),
+                        uri = jo.getString("uri"),
+                        baseUrl = jo.getString("baseUrl")
+                    )
+                    array.add(bundle)
+                }
+
+                return array
+            }
         } catch (ex: Throwable) {
             ex.printStackTrace()
         }
@@ -97,53 +118,46 @@ class BundleResource(context: Context, private val httpClient: OkHttpClient) {
         return emptyList()
     }
 
-    private fun save() {
-        try {
-            val bundles = loaded.map { mapOf("uri" to it.uri, "hash" to it.hash) }
-            val json = JSONArray(bundles).toString()
-            File(rootDir, "bundles").writeText(json)
-        } catch (ex: Throwable) {
-            ex.printStackTrace()
+
+    private fun extractTo(bundle: InputStream, dest: File) {
+        val files = mutableListOf<String>()
+        for (file in dest.walkTopDown()) {
+            if (file.isFile) {
+                val filename = file.absolutePath.replace(dest.absolutePath, "").substring(1)
+//                    Logger.error("entry => $filename")
+                files.add(filename)
+            }
         }
-    }
+        ZipInputStream(bundle).use {
+            var entry: ZipEntry? = it.nextEntry
 
-    private fun InputStream.unzip(item: BundleItem) {
-        try {
-            val dest = File(rootDir, item.hash)
-            ZipInputStream(this).use {
-                var entry: ZipEntry? = it.nextEntry
-
-                while (entry != null) {
-                    if (entry.isDirectory) {
-                        File(dest, entry.name).mkdirs()
-                    } else {
-                        val os = File(dest, entry.name).outputStream()
-                        it.copyTo(os)
-                        it.closeEntry()
-                    }
+            while (entry != null) {
+                if (entry.name.contains("__MACOSX")) {
                     entry = it.nextEntry
+                    continue
                 }
+                if (entry.isDirectory) {
+                    File(dest, entry.name).mkdirs()
+                } else if (entry.size > 0 && !files.remove(entry.name)) {
+//                  Logger.error("append => ${entry.name}")
+                    try {
+                        it.copyTo(File(dest, entry.name).outputStream())
+                    } catch (ex: Throwable) {
+                        ex.printStackTrace()
+                    }
+                }
+                entry = it.nextEntry
             }
-            loaded.add(item)
-            save()
-        } catch (ex: Throwable) {
-            ex.printStackTrace()
+
+            it.closeEntry()
+        }
+        files.forEach {
+//                Logger.error("delete => $it")
+            File(dest, it).delete()
         }
     }
 
-
-    fun intercept(request: WebResourceRequest): WebResourceResponse? {
-        val uri = request.url
-        val base = File(rootDir, uri.authority ?: return null)
-
-        base.list()?.let {
-            val filename = uri.path ?: return null
-            if (it.contains(filename)) {
-                val mime = MimeTypeMap.getFileExtensionFromUrl(filename)
-                val stream = assets.open("$base/$filename")
-                return WebResourceResponse(mime, "", stream)
-            }
-        }
-        return null
+    private fun getMimeType(url: String): String? {
+        return MimeTypeMap.getSingleton().getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(url))
     }
 }

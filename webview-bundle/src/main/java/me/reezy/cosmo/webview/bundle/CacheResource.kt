@@ -13,7 +13,7 @@ class CacheResource(private val httpClient: OkHttpClient) {
         this.baseUrls.addAll(baseUrls)
     }
 
-    fun intercept(request: WebResourceRequest): WebResourceResponse? {
+    fun get(request: WebResourceRequest): WebResourceResponse? {
         val url = request.url.toString()
 
         baseUrls.forEach {

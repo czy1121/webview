@@ -12,35 +12,24 @@ import java.util.concurrent.TimeUnit
 
 object WebBundleManager {
 
-    // js/css
     private lateinit var bundle: BundleResource
 
-    // html
     private lateinit var asset: AssetResource
 
-    //
     private lateinit var cache: CacheResource
 
-    fun init(context: Context, cacheDir: String = "okhttp-web", cacheMaxSize: Long = 100 * 1024 * 1024) {
+    fun init(context: Context, cacheDir: String = "web-cache", cacheMaxSize: Long = 100 * 1024 * 1024) {
 
-        val httpClient = context.createOkHttpClient(cacheDir, cacheMaxSize)
+        val httpClient = createOkHttpClient(File(context.cacheDir, cacheDir), cacheMaxSize, context.isDebuggable())
 
-        bundle = BundleResource(context, httpClient)
-        asset = AssetResource(context.assets)
+        bundle = BundleResource(context.assets, File(context.filesDir, "web-bundle"), httpClient)
+        asset = AssetResource(context.assets, "web-asset")
         cache = CacheResource(httpClient)
     }
 
 
-    fun loadBundles(locals: List<String>) {
-        bundle.load(locals.associate { "asset://$it" to "" })
-    }
-
-    fun loadBundles(remotes: Map<String, String>) {
-        bundle.load(remotes)
-    }
-
-    fun setAssetRootDir(dir: String) {
-        asset.setRootDir(dir)
+    fun addBundles(bundles: List<BundleItem>) {
+        bundle.add(bundles)
     }
 
     fun addCacheUrls(vararg baseUrls: String) {
@@ -49,16 +38,7 @@ object WebBundleManager {
 
 
     fun get(request: WebResourceRequest): WebResourceResponse? {
-        bundle.intercept(request)?.let {
-            return it
-        }
-        asset.intercept(request)?.let {
-            return it
-        }
-        cache.intercept(request)?.let {
-            return it
-        }
-        return null
+        return bundle.get(request) ?: asset.get(request) ?: cache.get(request)
     }
 
 
@@ -70,17 +50,19 @@ object WebBundleManager {
     }
 
 
-    private fun Context.createOkHttpClient(cacheDir: String, cacheMaxSize: Long = 100 * 1024 * 1024): OkHttpClient {
+    private fun createOkHttpClient(cacheDir: File, cacheMaxSize: Long = 100 * 1024 * 1024, isDebuggable: Boolean = true): OkHttpClient {
         return OkHttpClient.Builder()
-            .proxy(if (isDebuggable()) null else Proxy.NO_PROXY)
-            .cache(Cache(File(cacheDir, cacheDir), cacheMaxSize))
+            .proxy(if (isDebuggable) null else Proxy.NO_PROXY)
+            .cache(Cache(cacheDir, cacheMaxSize))
             .connectTimeout(20, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .writeTimeout(20, TimeUnit.SECONDS)
             .addNetworkInterceptor {
                 val response = it.proceed(it.request())
                 if (response.headers["Cache-Control"] == null) {
-                    response.newBuilder().header("Cache-Control", "max-age=7200").build()
+                    response.newBuilder()
+                        .header("Cache-Control", "max-age=864000")
+                        .build()
                 } else {
                     response
                 }
