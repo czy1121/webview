@@ -71,7 +71,7 @@ WebView 资源包管理，提升网页打开速度。
 - HTTP缓存，使用Okhttp的代替WebView的缓存管理
 
 
-假设有资源包 `BundleItem(id = "bundle1", uri = "https://cdn.a.com/bundle1-0.1.0.zip", baseUrl = "http://a.com/bundle1/")`
+假设有资源包 `BundleItem(id = "bundle1", uri = "https://cdn.a.com/bundle1-0.1.0.zip", baseUrl = "http://a.com/bundle1/")`   
 要加载资源 `http://a.com/bundle1/js/test.js`
  
 - 会先偿试从资源包加载 `files/web-bundle/bundle1/js/test.js`
