@@ -11,9 +11,9 @@ repositories {
     maven { url "https://gitee.com/ezy/repo/raw/cosmo/"}
 } 
 dependencies {
-    implementation "me.reezy.cosmo:webview-jsbridge:0.9.0"
-    implementation "me.reezy.cosmo:webview-bundle:0.9.0"
-    implementation "me.reezy.cosmo:webview-simple:0.9.0"
+    implementation "me.reezy.cosmo:webview-jsbridge:0.10.0"
+    implementation "me.reezy.cosmo:webview-bundle:0.10.0"
+    implementation "me.reezy.cosmo:webview-simple:0.10.0"
 }
 ```
 
